@@ -12,7 +12,7 @@ export const webhookHandler = async (req: Request, res: Response) => {
     const body: string = req.body
     const event = stripeClient.webhooks.constructEvent(body, sig, process.env.STRIPE_WEBHOOK)
 
-    if (event.type === 'payment_intent.created') {
+    if (event.type === 'charge.succeeded') {
       const charge = event.data.object as stripe.Charge
       const order = await Order.findOne({
         paymentIntentId: charge.payment_intent
@@ -23,6 +23,18 @@ export const webhookHandler = async (req: Request, res: Response) => {
         await order.save()
       }
     }
+    else if (event.type === 'charge.failed') {
+      const charge = event.data.object as stripe.Charge
+      const order = await Order.findOne({
+        paymentIntentId: charge.payment_intent
+      })
+      if (order) {
+        order.paymentStatus = 'failed'
+        order.paymentDetails = charge
+        await order.save()
+      }
+    }
+
     res.send({ received: true })
   } catch (error) {
     console.log(error, 'Error in webhookHandler')
